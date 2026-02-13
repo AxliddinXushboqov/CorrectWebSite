@@ -1,3 +1,5 @@
+using PuppeteerSharp;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -15,7 +17,8 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseRouting();
-
+// Brauzerni Heroku muhitiga moslab yuklab olish
+await new BrowserFetcher().DownloadAsync();
 app.UseAuthorization();
 
 app.MapStaticAssets();
