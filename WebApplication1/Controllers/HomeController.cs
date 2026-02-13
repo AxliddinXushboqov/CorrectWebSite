@@ -26,42 +26,35 @@ namespace WebApplication1.Controllers
             "--disable-setuid-sandbox",
             "--disable-dev-shm-usage",
             "--disable-gpu",
-            "--no-zygote",
-            "--single-process", // Heroku RAM limitidan oshib ketmaslik uchun
+            "--single-process",
             "--disable-blink-features=AutomationControlled"
         }
             };
 
-            // Heroku muhitini tekshirish
             string chromeBin = Environment.GetEnvironmentVariable("GOOGLE_CHROME_BIN");
-            bool isHeroku = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PORT"));
-
-            if (!isHeroku)
+            if (!string.IsNullOrEmpty(chromeBin))
             {
-                options.ExecutablePath = @"C:\Users\User\AppData\Local\Yandex\YandexBrowser\Application\browser.exe";
-            }
-            else
-            {
-                if (!string.IsNullOrEmpty(chromeBin))
-                {
-                    options.ExecutablePath = chromeBin;
-                }
+                options.ExecutablePath = chromeBin;
             }
 
             try
             {
                 using var browser = await Puppeteer.LaunchAsync(options);
                 using var page = await browser.NewPageAsync();
-
                 await page.SetUserAgentAsync("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36");
 
-                // Timeoutni 120 soniya qilamiz, Heroku sekinroq yuklaydi
+                // 1. Sahifani ochish
                 await page.GoToAsync("https://license.gov.uz/registry/591c96fe-de93-4f1d-8d26-c1c5974cade3",
                     new NavigationOptions { WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded }, Timeout = 120000 });
 
-                // Ma'lumotlar yuklanishi uchun 15 soniya kutamiz
-                await Task.Delay(15000);
+                // 2. Oynacha (modalka) paydo bo'lishini kutamiz (30 soniya)
+                try
+                {
+                    await page.WaitForSelectorAsync("[class*='InfoBlock_wrapper']", new WaitForSelectorOptions { Timeout = 30000 });
+                }
+                catch { }
 
+                // 3. Statuslarni va sanalarni o'zgartirish
                 await page.EvaluateFunctionAsync(@"() => {
                 const targetText = 'Муддати тугаган';
                 const replacement = 'Фаол';
@@ -129,18 +122,19 @@ namespace WebApplication1.Controllers
                 window.stop();
             }");
 
+                // 4. HTMLni olish va tozalash
                 string fullHtml = await page.GetContentAsync();
 
-                // Bazaviy sozlamalar
-                fullHtml = fullHtml.Replace("<script", "");
+                // Barcha skriptlarni Regex orqali o'chirib tashlaymiz
+                fullHtml = System.Text.RegularExpressions.Regex.Replace(fullHtml, @"<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
                 fullHtml = fullHtml.Replace("<head>", "<head><base href='https://license.gov.uz/'>");
 
                 return Content(fullHtml, "text/html");
             }
             catch (Exception ex)
             {
-                // Xato bo'lsa, logda nimaligini ko'ramiz
-                return Content($"Xatolik: {ex.Message} \n\n Brauzer yo'li: {options.ExecutablePath}");
+                return Content($"Xatolik: {ex.Message}");
             }
         }
     }
