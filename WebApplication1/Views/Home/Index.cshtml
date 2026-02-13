@@ -1,0 +1,83 @@
+﻿@{
+    // Layoutni null qilish orqali barcha menyu va footerlarni olib tashlaymiz
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Davlat xizmatlari reyestri</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        #content-display {
+            width: 100vw;
+            height: 100vh;
+            border: none;
+        }
+
+        .loader {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 2s linear infinite;
+        }
+
+        /* DIQQAT: Bu yerda ikkita @@ belgisi bo'lishi shart */
+        @@keyframes spin {
+            0% {
+                transform: translate(-50%, -50%) rotate(0deg);
+            }
+
+            100% {
+                transform: translate(-50%, -50%) rotate(360deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="loader-wrapper"><div class="loader"></div></div>
+    <div id="content-display"></div>
+
+    <script>
+        $(document).ready(function() {
+            // Sahifa ochilishi bilan AJAX darrov ishga tushadi
+            $.ajax({
+                url: '/Home/GetCleanData',
+                type: 'POST',
+                success: function(response) {
+                    if(response.success) {
+                        // Ma'lumotni div ichiga emas, butun bodyga yozamiz
+                        document.open();
+                        document.write(response.data);
+                        document.close();
+                    } else {
+                        alert("Xatolik: " + response.message);
+                    }
+                },
+                error: function() {
+                    alert("Server bilan aloqa uzildi.");
+                },
+                complete: function() {
+                    $('#loader-wrapper').hide();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
