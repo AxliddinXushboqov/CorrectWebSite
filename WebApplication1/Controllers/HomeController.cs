@@ -26,7 +26,8 @@ namespace WebApplication1.Controllers
             "--disable-setuid-sandbox",
             "--disable-dev-shm-usage",
             "--disable-gpu",
-            "--single-process",
+            "--no-zygote",
+            "--single-process", // Heroku qulab tushmasligi uchun eng muhim bayroq
             "--disable-blink-features=AutomationControlled"
         }
             };
@@ -41,13 +42,15 @@ namespace WebApplication1.Controllers
             {
                 using var browser = await Puppeteer.LaunchAsync(options);
                 using var page = await browser.NewPageAsync();
+
+                // Brauzer "tirikligini" bildirish uchun UserAgent
                 await page.SetUserAgentAsync("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36");
 
-                // 1. Sahifani ochish
+                // 1. Sahifani ochish (Timeoutni 2 daqiqa qildik)
                 await page.GoToAsync("https://license.gov.uz/registry/591c96fe-de93-4f1d-8d26-c1c5974cade3",
                     new NavigationOptions { WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded }, Timeout = 120000 });
 
-                // 2. Oynacha (modalka) paydo bo'lishini kutamiz (30 soniya)
+                // 2. Modalka (oynacha) yuklanishini kutish (Timeout 30s)
                 try
                 {
                     await page.WaitForSelectorAsync("[class*='InfoBlock_wrapper']", new WaitForSelectorOptions { Timeout = 30000 });
@@ -122,10 +125,10 @@ namespace WebApplication1.Controllers
                 window.stop();
             }");
 
-                // 4. HTMLni olish va tozalash
+                // 4. HTMLni olish va Regex bilan skriptlarni butunlay tozalash
                 string fullHtml = await page.GetContentAsync();
 
-                // Barcha skriptlarni Regex orqali o'chirib tashlaymiz
+                // Bu kod tepada chiqib qolgan yozuvlarni butunlay yo'qotadi
                 fullHtml = System.Text.RegularExpressions.Regex.Replace(fullHtml, @"<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
                 fullHtml = fullHtml.Replace("<head>", "<head><base href='https://license.gov.uz/'>");
