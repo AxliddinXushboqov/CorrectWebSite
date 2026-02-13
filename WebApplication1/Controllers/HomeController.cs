@@ -22,35 +22,31 @@ namespace WebApplication1.Controllers
             {
                 Headless = true,
                 Args = new[] {
-    "--no-sandbox",
-    "--disable-setuid-sandbox",
-    "--disable-dev-shm-usage",
-    "--disable-accelerated-2d-canvas",
-    "--disable-gpu",
-    "--no-first-run",
-    "--no-zygote",
-    "--single-process" 
-}
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--single-process"
+    }
             };
 
             bool isHeroku = Environment.GetEnvironmentVariable("PORT") != null;
 
             if (!isHeroku)
             {
+                // Lokal kompyuteringiz uchun (Yandex manzili qolsin)
                 options.ExecutablePath = @"C:\Users\User\AppData\Local\Yandex\YandexBrowser\Application\browser.exe";
             }
             else
             {
-                var googleChromePath = Environment.GetEnvironmentVariable("GOOGLE_CHROME_BIN");
-
-                if (!string.IsNullOrEmpty(googleChromePath))
+                // HEROKUDA: Hech qanday path ko'rsatmaymiz! 
+                // Faqat buildpack o'rnatgan o'zgaruvchini tekshiramiz
+                var chromeBin = Environment.GetEnvironmentVariable("GOOGLE_CHROME_BIN");
+                if (!string.IsNullOrEmpty(chromeBin))
                 {
-                    options.ExecutablePath = googleChromePath;
+                    options.ExecutablePath = chromeBin;
                 }
-                else
-                {
-                    options.ExecutablePath = "/app/.apt/usr/bin/google-chrome";
-                }
+                // Agar chromeBin ham bo'sh bo'lsa, Puppeteer o'zi default joylardan qidiradi
             }
 
             try
@@ -61,12 +57,16 @@ namespace WebApplication1.Controllers
 
                 await page.SetUserAgentAsync("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36...");
 
-                var response = await page.GoToAsync("https://license.gov.uz/registry/591c96fe-de93-4f1d-8d26-c1c5974cade3",
-                    new NavigationOptions
-                    {
-                        WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded },
-                        Timeout = 90000
-                    });
+                await page.GoToAsync("https://license.gov.uz/registry/591c96fe-de93-4f1d-8d26-c1c5974cade3");
+
+                try
+                {
+                    await page.WaitForSelectorAsync(".InfoBlock_wrapper--red__jtp2-", new WaitForSelectorOptions { Timeout = 30000 });
+                }
+                catch
+                {
+                    // Topilmasa ham davom etaveradi
+                }
 
                 try
                 {
