@@ -24,30 +24,28 @@ namespace WebApplication1.Controllers
                 Args = new[] {
             "--no-sandbox",
             "--disable-setuid-sandbox",
-            "--disable-dev-shm-usage", // Heroku xotirasi (RAM) uchun juda muhim
+            "--disable-dev-shm-usage",
             "--disable-gpu",
-            "--single-process",        // Jarayonlarni bittaga yig'adi (qulashni oldini oladi)
+            "--no-zygote",
+            "--single-process", // Heroku RAM limitidan oshib ketmaslik uchun
             "--disable-blink-features=AutomationControlled"
         }
             };
 
-            // 1. BRAUZER YO'LINI ANIQLASH
+            // Heroku muhitini tekshirish
             string chromeBin = Environment.GetEnvironmentVariable("GOOGLE_CHROME_BIN");
+            bool isHeroku = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PORT"));
 
-            if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PORT")))
+            if (!isHeroku)
             {
-                // LOKAL KOMPYUTERDA
                 options.ExecutablePath = @"C:\Users\User\AppData\Local\Yandex\YandexBrowser\Application\browser.exe";
             }
             else
             {
-                // HEROKU SERVERIDA
                 if (!string.IsNullOrEmpty(chromeBin))
                 {
                     options.ExecutablePath = chromeBin;
                 }
-                // Agar chromeBin bo'sh bo'lsa ham ExecutablePath o'rnatilmaydi, 
-                // Puppeteer o'zi tizimdan qidiradi
             }
 
             try
@@ -57,19 +55,13 @@ namespace WebApplication1.Controllers
 
                 await page.SetUserAgentAsync("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36");
 
-                // 2. SAHIFANI OCHISH (WaitUntil-ni o'zgartirdik, tezroq yuklanishi uchun)
+                // Timeoutni 120 soniya qilamiz, Heroku sekinroq yuklaydi
                 await page.GoToAsync("https://license.gov.uz/registry/591c96fe-de93-4f1d-8d26-c1c5974cade3",
-                    new NavigationOptions { WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded }, Timeout = 90000 });
+                    new NavigationOptions { WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded }, Timeout = 120000 });
 
-                // 3. MA'LUMOTLAR PAYDO BO'LISHINI KUTAMIZ (delay-dan ko'ra ishonchliroq)
-                // Herokuda sekin ishlagani uchun oynacha paydo bo'lishini 30 soniyagacha kutadi
-                try
-                {
-                    await page.WaitForSelectorAsync("[class*='InfoBlock_wrapper']", new WaitForSelectorOptions { Timeout = 30000 });
-                }
-                catch { /* Agar topilmasa ham davom etadi */ }
+                // Ma'lumotlar yuklanishi uchun 15 soniya kutamiz
+                await Task.Delay(15000);
 
-                // 4. JAVASCRIPT TRANSFORMATSIYA
                 await page.EvaluateFunctionAsync(@"() => {
                 const targetText = 'Муддати тугаган';
                 const replacement = 'Фаол';
@@ -137,8 +129,9 @@ namespace WebApplication1.Controllers
                 window.stop();
             }");
 
-                // 5. NATIJANI OLISH
                 string fullHtml = await page.GetContentAsync();
+
+                // Bazaviy sozlamalar
                 fullHtml = fullHtml.Replace("<script", "");
                 fullHtml = fullHtml.Replace("<head>", "<head><base href='https://license.gov.uz/'>");
 
@@ -146,8 +139,8 @@ namespace WebApplication1.Controllers
             }
             catch (Exception ex)
             {
-                // Xatoni logga yozish yoki foydalanuvchiga ko'rsatish
-                return Content($"Xatolik: {ex.Message}. Stack: {ex.StackTrace}");
+                // Xato bo'lsa, logda nimaligini ko'ramiz
+                return Content($"Xatolik: {ex.Message} \n\n Brauzer yo'li: {options.ExecutablePath}");
             }
         }
     }
