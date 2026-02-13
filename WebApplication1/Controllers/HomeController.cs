@@ -26,20 +26,38 @@ namespace WebApplication1.Controllers
             "--disable-setuid-sandbox",
             "--disable-dev-shm-usage",
             "--disable-gpu",
-            "--no-zygote",
-            "--single-process", // Heroku qulab tushmasligi uchun eng muhim bayroq
-            "--disable-blink-features=AutomationControlled"
+            "--single-process", // Heroku RAM limitidan oshmaslik uchun
+            "--no-zygote"
         }
             };
 
+            // Heroku muhitida GOOGLE_CHROME_BIN o'zgaruvchisi avtomatik o'rnatiladi
             string chromeBin = Environment.GetEnvironmentVariable("GOOGLE_CHROME_BIN");
-            if (!string.IsNullOrEmpty(chromeBin))
+            bool isHeroku = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PORT"));
+
+            if (!isHeroku)
             {
-                options.ExecutablePath = chromeBin;
+                // Lokal kompyuteringiz uchun
+                options.ExecutablePath = @"C:\Users\User\AppData\Local\Yandex\YandexBrowser\Application\browser.exe";
+            }
+            else
+            {
+                // HEROKU UCHUN: Agar o'zgaruvchi bo'lsa uni ishlatamiz, 
+                // bo'lmasa Puppeteer o'zi default joylardan qidiradi
+                if (!string.IsNullOrEmpty(chromeBin))
+                {
+                    options.ExecutablePath = chromeBin;
+                }
+                else
+                {
+                    // Buildpack ba'zan mana bu yerga o'rnatadi:
+                    options.ExecutablePath = "/app/.apt/usr/bin/google-chrome";
+                }
             }
 
             try
             {
+                // ... qolgan barcha kodlar (GoToAsync, EvaluateFunction, etc.)
                 using var browser = await Puppeteer.LaunchAsync(options);
                 using var page = await browser.NewPageAsync();
 
