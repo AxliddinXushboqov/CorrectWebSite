@@ -22,60 +22,54 @@ namespace WebApplication1.Controllers
             {
                 Headless = true,
                 Args = new[] {
-                    "--no-sandbox",
-                    "--disable-setuid-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--disable-gpu",
-                    "--single-process"
-    }
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage", // Heroku xotirasi (RAM) uchun juda muhim
+            "--disable-gpu",
+            "--single-process",        // Jarayonlarni bittaga yig'adi (qulashni oldini oladi)
+            "--disable-blink-features=AutomationControlled"
+        }
             };
 
-            bool isHeroku = Environment.GetEnvironmentVariable("PORT") != null;
+            // 1. BRAUZER YO'LINI ANIQLASH
+            string chromeBin = Environment.GetEnvironmentVariable("GOOGLE_CHROME_BIN");
 
-            if (!isHeroku)
+            if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PORT")))
             {
-                // Lokal kompyuteringiz uchun (Yandex manzili qolsin)
+                // LOKAL KOMPYUTERDA
                 options.ExecutablePath = @"C:\Users\User\AppData\Local\Yandex\YandexBrowser\Application\browser.exe";
             }
             else
             {
-                // HEROKUDA: Hech qanday path ko'rsatmaymiz! 
-                // Faqat buildpack o'rnatgan o'zgaruvchini tekshiramiz
-                var chromeBin = Environment.GetEnvironmentVariable("GOOGLE_CHROME_BIN");
+                // HEROKU SERVERIDA
                 if (!string.IsNullOrEmpty(chromeBin))
                 {
                     options.ExecutablePath = chromeBin;
                 }
-                // Agar chromeBin ham bo'sh bo'lsa, Puppeteer o'zi default joylardan qidiradi
+                // Agar chromeBin bo'sh bo'lsa ham ExecutablePath o'rnatilmaydi, 
+                // Puppeteer o'zi tizimdan qidiradi
             }
 
             try
             {
                 using var browser = await Puppeteer.LaunchAsync(options);
-                // ... qolgan kodlar
                 using var page = await browser.NewPageAsync();
 
-                await page.SetUserAgentAsync("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36...");
+                await page.SetUserAgentAsync("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36");
 
-                await page.GoToAsync("https://license.gov.uz/registry/591c96fe-de93-4f1d-8d26-c1c5974cade3");
+                // 2. SAHIFANI OCHISH (WaitUntil-ni o'zgartirdik, tezroq yuklanishi uchun)
+                await page.GoToAsync("https://license.gov.uz/registry/591c96fe-de93-4f1d-8d26-c1c5974cade3",
+                    new NavigationOptions { WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded }, Timeout = 90000 });
 
+                // 3. MA'LUMOTLAR PAYDO BO'LISHINI KUTAMIZ (delay-dan ko'ra ishonchliroq)
+                // Herokuda sekin ishlagani uchun oynacha paydo bo'lishini 30 soniyagacha kutadi
                 try
                 {
-                    await page.WaitForSelectorAsync(".InfoBlock_wrapper--red__jtp2-", new WaitForSelectorOptions { Timeout = 30000 });
+                    await page.WaitForSelectorAsync("[class*='InfoBlock_wrapper']", new WaitForSelectorOptions { Timeout = 30000 });
                 }
-                catch
-                {
-                    // Topilmasa ham davom etaveradi
-                }
+                catch { /* Agar topilmasa ham davom etadi */ }
 
-                try
-                {
-                    await page.WaitForSelectorAsync("[class*='InfoBlock_wrapper']", new WaitForSelectorOptions { Timeout = 15000 });
-                }
-                catch
-                {
-                }
-
+                // 4. JAVASCRIPT TRANSFORMATSIYA
                 await page.EvaluateFunctionAsync(@"() => {
                 const targetText = 'Муддати тугаган';
                 const replacement = 'Фаол';
@@ -143,8 +137,8 @@ namespace WebApplication1.Controllers
                 window.stop();
             }");
 
+                // 5. NATIJANI OLISH
                 string fullHtml = await page.GetContentAsync();
-
                 fullHtml = fullHtml.Replace("<script", "");
                 fullHtml = fullHtml.Replace("<head>", "<head><base href='https://license.gov.uz/'>");
 
@@ -152,7 +146,8 @@ namespace WebApplication1.Controllers
             }
             catch (Exception ex)
             {
-                return Content($"Xatolik yuz berdi: {ex.Message}");
+                // Xatoni logga yozish yoki foydalanuvchiga ko'rsatish
+                return Content($"Xatolik: {ex.Message}. Stack: {ex.StackTrace}");
             }
         }
     }
