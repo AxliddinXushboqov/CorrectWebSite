@@ -18,17 +18,19 @@ namespace WebApplication1.Controllers
         [HttpGet]
         public async Task<IActionResult> ShowRegistryPage()
         {
-            // 1. Puppeteer variantlarini sozlash
             var options = new LaunchOptions
             {
                 Headless = true,
                 Args = new[] {
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-gpu",
-                "--disable-blink-features=AutomationControlled"
-    }
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-accelerated-2d-canvas",
+    "--disable-gpu",
+    "--no-first-run",
+    "--no-zygote",
+    "--single-process" 
+}
             };
 
             bool isHeroku = Environment.GetEnvironmentVariable("PORT") != null;
@@ -39,20 +41,40 @@ namespace WebApplication1.Controllers
             }
             else
             {
-                await new BrowserFetcher().DownloadAsync();
+                var googleChromePath = Environment.GetEnvironmentVariable("GOOGLE_CHROME_BIN");
+
+                if (!string.IsNullOrEmpty(googleChromePath))
+                {
+                    options.ExecutablePath = googleChromePath;
+                }
+                else
+                {
+                    options.ExecutablePath = "/app/.apt/usr/bin/google-chrome";
+                }
             }
 
             try
             {
                 using var browser = await Puppeteer.LaunchAsync(options);
+                // ... qolgan kodlar
                 using var page = await browser.NewPageAsync();
 
                 await page.SetUserAgentAsync("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36...");
 
-                await page.GoToAsync("https://license.gov.uz/registry/591c96fe-de93-4f1d-8d26-c1c5974cade3",
-                    new NavigationOptions { WaitUntil = new[] { WaitUntilNavigation.Load }, Timeout = 60000 });
+                var response = await page.GoToAsync("https://license.gov.uz/registry/591c96fe-de93-4f1d-8d26-c1c5974cade3",
+                    new NavigationOptions
+                    {
+                        WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded },
+                        Timeout = 90000
+                    });
 
-                await Task.Delay(5000);
+                try
+                {
+                    await page.WaitForSelectorAsync("[class*='InfoBlock_wrapper']", new WaitForSelectorOptions { Timeout = 15000 });
+                }
+                catch
+                {
+                }
 
                 await page.EvaluateFunctionAsync(@"() => {
                 const targetText = 'Муддати тугаган';
@@ -121,15 +143,11 @@ namespace WebApplication1.Controllers
                 window.stop();
             }");
 
-                // 5. Tozalangan HTMLni olamiz
                 string fullHtml = await page.GetContentAsync();
 
-                // 6. Xavfsizlik va Stillar
                 fullHtml = fullHtml.Replace("<script", "");
                 fullHtml = fullHtml.Replace("<head>", "<head><base href='https://license.gov.uz/'>");
 
-                // 7. NATIJANI TO'G'RIDAN-TO'G'RI BRAUZERGA CHIQARAMIZ
-                // View() emas, Content() ishlatamiz, shunda HTML xuddi o'zidek ochiladi
                 return Content(fullHtml, "text/html");
             }
             catch (Exception ex)
